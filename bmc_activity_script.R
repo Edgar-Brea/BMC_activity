@@ -10,6 +10,7 @@ library(tidyr)
 library(waffle)
 library(ggplot2)
 library(ggpubr)
+library(Rlof)
 
 #********************************************************************************************************************************************************************************************************
 # Code to investigate business model change (BMC) activity in firms. It imports historical financial data from the project's SQLite database, uses dimensionality reduction with a collection
@@ -70,7 +71,7 @@ raw_summary <- merge(temp4, temp3[,-2], by = "vars")
 rm(temp,temp2,temp3,temp4) #clear temporary dataframes from memory
 
 #Result:
-#rd.sa and rd.ot have too many zeros (%25), while others have >3%. This means contribution to these variable is singificantly lower --> Drop them for consistency.
+#rd.sa and rd.ot have too many zeros (%25), while others have >3%. This means contribution to these variable is significantly lower --> Drop them for consistency.
 data <- raw[raw$parameter!="rd.sa" & raw$parameter!="rd.ot",] #remove rd.sa and rd.ot
 #Also, there are extreme outliers in most variables --> Winsorise all variables
 data <- data %>% 

@@ -1,0 +1,132 @@
+---
+title: "Exploring business model change activity in IT companies"
+author: "Edgar Brea"
+date: "08/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RSQLite)
+library(reshape2)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
+library(psych)
+library(dplyr)
+library(DescTools)
+library(tidyr)
+library(waffle)
+library(ggplot2)
+library(ggpubr)
+library(Rlof)
+```
+
+
+```{r import, include=FALSE}
+dbconn <- dbConnect(dbDriver("SQLite"), dbname = "~/Documents/SQLite/BMC_activity_data.sqlite")
+query_1 <- "SELECT ID_company, parameter, timepoint, value FROM ratios_imputed_table WHERE timepoint  >= 2006 AND value IS NOT NULL"
+ratios_raw <- data.frame(dbGetQuery(dbconn, query_1), stringsAsFactors = F)
+
+query_2 <- "SELECT ID_company, parameter, timepoint, value FROM financials_imputed_table WHERE parameter = 'Tota' AND timepoint  >= 2006 AND value IS NOT NULL"
+financials_raw <- data.frame(dbGetQuery(dbconn, query_2), stringsAsFactors = F)
+
+query_3 <- "SELECT ID_company, name, gics_code, incorp_date FROM companies_table"
+companies_raw <- data.frame(dbGetQuery(dbconn, query_3), stringsAsFactors = F)
+
+dbDisconnect(dbconn)
+
+#merge all:
+raw <- rbind(ratios_raw, financials_raw)
+raw <- merge(raw, companies_raw, by = "ID_company")
+raw <- raw[,c(1,5,6,7,2,3,4)]
+```
+
+```{r wrangling_1, include=FALSE}
+#Inspect data / data wrangling (1B):
+temp <- raw
+temp$ID_company_timep <- paste(temp$ID_company, temp$timepoint, sep = "_") # new column with ID company and timepoint
+temp2 <- dcast(temp, ID_company_timep ~ parameter, value.var = "value") #transform data from long to wide format
+temp3 <- data.frame(psych::describe(temp2[,-1])) # descriptive analysis
+temp3$vars <- row.names(temp3)
+#additional descriptives for NAs, zeroes, etc:
+no_obs <- length(unique(temp$ID_company))*12
+temp4 <- raw %>% 
+  group_by(parameter) %>% 
+  summarise(n = n(), 
+            NAs = no_obs-n(), 
+            NAs_perc = (no_obs-n())*100/no_obs, 
+            Zeros = sum(value==0), 
+            Zeros_perc = sum(value==0)*100/no_obs)
+colnames(temp4)[1] <- "vars"
+raw_summary <- merge(temp4, temp3[,-2], by = "vars")
+rm(temp,temp2,temp3,temp4) #clear temporary dataframes from memory
+
+#Result:
+#rd.sa and rd.ot have too many zeros (%25), while others have >3%. This means contribution to these variable is significantly lower --> Drop them for consistency.
+data <- raw[raw$parameter!="rd.sa" & raw$parameter!="rd.ot",] #remove rd.sa and rd.ot
+#Also, there are extreme outliers in most variables --> Winsorise all variables
+data <- data %>% 
+  dplyr::group_by(parameter) %>% 
+  mutate(value = DescTools::Winsorize(value, probs = c(0.01, 0.99), na.rm = T)) #winzorize extreme outliers per variable (1% level)
+
+#Inspect data again:
+temp <- data
+temp$ID_company_timep <- paste(temp$ID_company, temp$timepoint, sep = "_") # new column with ID company and timepoint
+temp2 <- dcast(temp, ID_company_timep ~ parameter, value.var = "value") #transform data from long to wide format
+temp3 <- data.frame(psych::describe(temp2[,-1])) # descriptive analysis
+temp3$vars <- row.names(temp3)
+#additional descriptives for NAs, zeroes, etc:
+no_obs <- length(unique(temp$ID_company))*12
+temp4 <- raw %>% 
+  group_by(parameter) %>% 
+  summarise(n = n(), 
+            NAs = no_obs-n(), 
+            NAs_perc = (no_obs-n())*100/no_obs, 
+            Zeros = sum(value==0), 
+            Zeros_perc = sum(value==0)*100/no_obs)
+colnames(temp4)[1] <- "vars"
+raw_summary <- merge(temp4, temp3[,-2], by = "vars")
+rm(temp,temp2,temp3,temp4) #clear temporary dataframes from memory
+#...Result: skewness significantly reduced (from ~100 in some cases to ~5)
+```
+## 1. Sample of companies:
+
+This study focus on global, publicly listed companies from the Information Technology and Communication Services sectors (GICS codes 45 and 50). After a systematic selection of companies with available data on key financial ratios, the final sample was **`r length(unique(data$ID_company))`**. Here is the distribution of the sample across GICS industry groups (4-digit GICS codes):
+
+```{r descriptives, echo=FALSE, warning=FALSE, message=FALSE}
+#show sample of companies by industry:
+df_plot <- data %>%
+  group_by(substr(gics_code,1,4)) %>%
+  summarise(no_companies = n_distinct(ID_company))
+colnames(df_plot) <- c("GICS_industry_group", "no_companies")
+df_plot <- df_plot[order(df_plot$GICS_industry_group),]
+df_plot$GICS_industry_group <- c("4510 - Software & Services",
+                                 "4520 - Technology Hardware & Equipment",
+                                 "4530 - Semiconductors & Semiconductor Equipment",
+                                 "5010 -Communication Services",
+                                 "5020 - Media & Entertainment")
+ggplot(df_plot, aes(x = GICS_industry_group, y = no_companies, fill = GICS_industry_group)) +
+  geom_bar(stat = "identity") + theme_minimal() + theme(legend.position = "none") + coord_flip()
+```
+
+## 2. Measuring the three dimensions of the business model
+
+
+## 3. Outlier analysis to detect business model changes (BMC)
+
+
+## 4. Assessing company charateristics - BMC pattern relationship
+
+
+### 4.1 Group companies by BMC patterns
+
+### 4.2 Group companies by key characteristics
+
+### 4.3 Chi-Square test
+
+
+## 5. Results discussion
+
+
+
